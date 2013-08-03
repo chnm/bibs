@@ -31,12 +31,14 @@ import glob
 import yaml, json
 from dicttoxml import dicttoxml
 import xmltodict
+import logging
 from lxml import etree
 import re
 import copy
 import pprint
 from collections import OrderedDict
 
+logger = logging.getLogger(__name__)
 
 class Bibs(object):
 
@@ -48,7 +50,7 @@ class Bibs(object):
 
 
     def find_sources(self):
-        self.sourcefile_list = glob.glob(os.path.dirname(__file__) + 
+        self.sourcefile_list = glob.glob(os.path.dirname(__file__) +
                                      '/' + Bibs.source_dir + '*.yaml')
         self.source_list = []
         for sourcefile in self.sourcefile_list:
@@ -75,10 +77,13 @@ class Bibs(object):
             raise Exception('Invalid source \'' + str(source) + '\'')
 
 
-    def search(self, input_string, source=None, api='default', 
+    def search(self, input_string, source=None, api='default',
                return_format='', inherit_from=None, pretty_print=False):
+
         search_source = self.get_source(source)
         query_object = self.create_query_object(input_string, search_source, api)
+
+        logger.debug('querying %s api, base url is %s' % (source, query_object.url))
         query_object.parse_input_elements()
         query_object.parse_input_options()
         query_object.determine_format()
@@ -87,11 +92,11 @@ class Bibs(object):
         #return
         request = urlopen(query_object.query_string)
         results = request.read().decode('utf-8')
-        results = self.convert_results(results, query_object.output_format, 
+        results = self.convert_results(results, query_object.output_format,
                                        return_format, inherit_from)
         if pretty_print:
             pprint.pprint(results)
-        return results        
+        return results
 
 
     def get_url(self, input_string, source=None, api='default'):
@@ -105,14 +110,14 @@ class Bibs(object):
         return query_object.query_string
 
 
-    def convert_results(self, results, output_format, 
+    def convert_results(self, results, output_format,
                         return_format, inherit_from):
         if output_format == 'json':
             if return_format.lower() == 'xml':
                 results = dicttoxml(json.loads(results))
             elif return_format.lower() == 'object':
-                results = self.json_to_object(json.loads(results), 
-                                              'QueryObject', 
+                results = self.json_to_object(json.loads(results),
+                                              'QueryObject',
                                               inherit_from)
             else:
                 results = json.loads(results)
@@ -121,19 +126,19 @@ class Bibs(object):
                 results = json.loads(json.dumps(xmltodict.parse(results)))
             elif return_format.lower() == 'object':
                 jsonresults = json.loads(json.dumps(xmltodict.parse(results)))
-                results = self.json_to_object(jsonresults, 
+                results = self.json_to_object(jsonresults,
                                               'QueryObject',
                                               inherit_from)
         elif output_format == 'javascript':
             if return_format.lower() in ('json', 'xml', 'object'):
-                print ('Cannot Convert \'JavaScript\' response to \'' + 
+                print ('Cannot Convert \'JavaScript\' response to \'' +
                        return_format.lower() +'\'...returning \'JavaScript\'')
             pass
         return results
 
 
     def json_to_object(self, json, classname, inherit_from=None):
-        cls = 'QueryObjectSubElement'       
+        cls = 'QueryObjectSubElement'
         if isinstance(json, list):
             object_list = []
             for item in json:
@@ -153,7 +158,7 @@ class Bibs(object):
                 else:
                     object_dict[key] = value
             if isinstance(inherit_from, tuple):
-                inherits = inherit_from 
+                inherits = inherit_from
             else:
                 inherits = ()
             return type(classname, inherits, object_dict)
@@ -163,7 +168,7 @@ class Bibs(object):
 
     def make_valid_python_variable_name(self, string):
         return re.sub('[^a-zA-Z0-9_]', '__', string)
-        
+
 
     def help(self, source=None, api=None, detail=None):
         if source is None:
@@ -185,7 +190,7 @@ class Bibs(object):
                             print (ws + p + '-> (... \n\n' + buf.getvalue() + ws +'...)')
                         else:
                             print (ws + p)
-                        ws += '   '                    
+                        ws += '   '
 
             elif 'help' in search_source['api'][api]:
                 print (search_source['api'][api]['help'])
@@ -231,14 +236,14 @@ class Bibs(object):
                 if prefix == 'format' or entry == 'format':
                     self.output_format = value
                     return
-                
 
-    def enforce_requirements(self):        
+
+    def enforce_requirements(self):
         self.check_required()
         self.check_minimum()
-        
 
-    def check_minimum(self):        
+
+    def check_minimum(self):
         if 'prototype' in self.query_elements:
             prototype_params = self.prototype['parameters']
             if prototype_params is None:
@@ -255,7 +260,7 @@ class Bibs(object):
                 if len(self.proto_optional) == len(prototype_params):
                     return
             proto = self.query_elements['prototype']['value']
-            raise Exception('Prototype \'' + proto + 
+            raise Exception('Prototype \'' + proto +
                             '\' requires atleast one argument.')
         else:
             if len(self.query_elements['field']) < 1:
@@ -271,7 +276,7 @@ class Bibs(object):
                 continue
 
             required = items['keywords']
-            
+
             if isinstance(required, dict):
                 new_list = []
                 for key in required.keys():
@@ -285,7 +290,7 @@ class Bibs(object):
                         try:
                             if r in element[i]:
                                 found.append(r)
-                                break 
+                                break
                         except:
                             continue
 
@@ -298,11 +303,11 @@ class Bibs(object):
                     raise Exception('Missing conditional argument(s)...Found:\''+
                                     str(found)+'\'  Required:\''+str(required)+'\'')
 
-    
-    def build_arg_string(self, mode):        
+
+    def build_arg_string(self, mode):
         if mode not in self.query_elements:
             return
-        
+
         for num, arg in enumerate(self.query_elements[mode]):
             entry = arg['entry']
             prefix = arg['prefix']
@@ -315,7 +320,7 @@ class Bibs(object):
 
             arg['string'] = ''
 
-            if isinstance(value, dict): 
+            if isinstance(value, dict):
                 if value['value']:
                     if 'args' in syntax:
                         char = syntax['args']
@@ -324,7 +329,7 @@ class Bibs(object):
                     value = value['prefix'] + char + value['value']
                 else:
                     value = value['prefix']
-            
+
             if isinstance(entry, dict):
                 entry = self.assign_dict_value(entry, value)
                 if self.input_type == 'json':
@@ -345,7 +350,7 @@ class Bibs(object):
                         arg['string'] += entry
                     elif entry and value:
                         arg['string'] += entry + syntax['bind'] + quote(value)
-                        
+
                     for index in self.multi:
                         if num in index:
                             for i in index:
@@ -353,24 +358,24 @@ class Bibs(object):
                                     if i < len(index)-1:
                                         arg['string'] += self.syntax['multi']['bind']
                                     else:
-                                        arg['string'] += self.syntax[mode]['chain'] 
+                                        arg['string'] += self.syntax[mode]['chain']
                         else:
-                            arg['string'] += self.syntax[mode]['chain'] 
+                            arg['string'] += self.syntax[mode]['chain']
             #print ('string:', arg['string'])
 
 
     def build_string(self):
         for mode in ('prototype', 'field', 'option'):
             self.build_arg_string(mode)
-       
+
         string = []
         for mode in ('prototype','field', 'option'):
             if mode in self.query_elements:
-                for num, arg in enumerate(self.query_elements[mode]):                    
+                for num, arg in enumerate(self.query_elements[mode]):
                     syntax = arg['syntax']
                     if self.input_type == 'json':
                         string.append(arg['string'])
-                    else:    
+                    else:
                         if arg['prefix']:
                             if (arg['prefix']) not in string:
                                 if len(self.multi) == 0:
@@ -382,10 +387,10 @@ class Bibs(object):
                             prefix = arg['prefix']
                             self.query_elements[mode][num] = None
                             if 'multi' in syntax:
-                                for num, arg in enumerate(self.query_elements[mode]):                    
+                                for num, arg in enumerate(self.query_elements[mode]):
                                     if arg and prefix == arg['prefix']:
                                         string.append(syntax['multi'])
-                                        break                
+                                        break
                         else:
                             if len(self.multi) == 0:
                                 string.append(syntax['chain'])
@@ -404,14 +409,14 @@ class Bibs(object):
                         if char in self.syntax[mode]:
                             string = string.lstrip(self.syntax[mode][char])
                             string = string.rstrip(self.syntax[mode][char])
-                    
+
             self.query_string = self.url + self.path.format(string)
-        
+
 
     def assign_list_value(self, param_list, value):
         if len(param_list) == 1:
             prefix = param_list.pop()
-        else: 
+        else:
             prefix = None
         values = value.split('|')
         for v in values:
@@ -423,7 +428,7 @@ class Bibs(object):
 
 
     def assign_dict_value(self, param_dict, value):
-        for param, entry in param_dict.items():            
+        for param, entry in param_dict.items():
             if isinstance(entry, str):
                 if self.multi_value:
                     value = re.sub('(?<!\\\\)\|', self.syntax['multi']['bind'], value)
@@ -443,29 +448,29 @@ class Bibs(object):
         for elements in self.input_options:
             arg = elements[:-1]
             value = [elements[-1],][0]
-            path, entry = self.find_param(arg, self.options)            
+            path, entry = self.find_param(arg, self.options)
             if not entry:
-                    raise Exception('Invalid parameter \''+str(arg)+'\'')                
+                    raise Exception('Invalid parameter \''+str(arg)+'\'')
 
-            syntax = self.get_syntax(self.options, path, 'option')            
+            syntax = self.get_syntax(self.options, path, 'option')
             prefix = self.get_prefix(self.options, path)
-                        
-            self.query_elements['option'].append({'prefix': prefix, 
-                                                  'entry': entry, 
+
+            self.query_elements['option'].append({'prefix': prefix,
+                                                  'entry': entry,
                                                   'value': value,
                                                   'syntax': syntax})
 
     def parse_input_elements(self):
         self.query_elements['field'] = []
         for elements in self.input_elements:
-            
+
             arg = elements[:-1]
             value = [elements[-1],][0]
-            
+
             if self.params is None:
-                self.add_field_arg('', value) 
+                self.add_field_arg('', value)
                 continue
-            
+
             if self.global_required:
                 if self.parse_with_global_required(arg, value):
                     continue
@@ -473,24 +478,24 @@ class Bibs(object):
             if self.prototype:
                 self.parse_with_prototype(arg, value)
             else:
-                path, entry = self.find_param(arg, self.params)                            
+                path, entry = self.find_param(arg, self.params)
                 if not entry:
-                    raise Exception('Invalid parameter \''+str(arg)+'\'')                
-                
-                root = path[0]                
+                    raise Exception('Invalid parameter \''+str(arg)+'\'')
+
+                root = path[0]
 
                 if 'mode' in self.params[root]:
                     mode = self.params[root]['mode']
                 else:
                     mode = self.params['mode']
-                
+
                 syntax = self.get_syntax(self.params, path, mode)
                 prefix = self.get_prefix(self.params, path)
 
                 if mode == 'field':
                     self.add_argument(entry, prefix, value, syntax)
 
-                elif mode == 'prototype':                    
+                elif mode == 'prototype':
                     self.parse_prototype(entry, prefix, value, syntax)
 
         #print '\n' + str(self.query_elements)
@@ -544,13 +549,13 @@ class Bibs(object):
                         else:
                             return self.get_prefix(parameter, _path)
         return prefix
-        
+
 
     def add_argument(self, entry, prefix, value, syntax):
         if isinstance(entry, list):
             entry = entry[-1]
-        self.query_elements['field'].append({'prefix': prefix, 
-                                             'entry':entry, 
+        self.query_elements['field'].append({'prefix': prefix,
+                                             'entry':entry,
                                              'value':value,
                                              'syntax': syntax})
 
@@ -561,7 +566,7 @@ class Bibs(object):
         syntax = self.get_syntax(self.global_required, path, mode)
         prefix = self.get_prefix(self.global_required, path)
         if entry:
-            self.query_elements['field'].append({'prefix': prefix, 
+            self.query_elements['field'].append({'prefix': prefix,
                                                  'entry': entry,
                                                  'value': value,
                                                  'syntax': syntax})
@@ -588,13 +593,13 @@ class Bibs(object):
                 else:
                     d[item] = e
                 return d
-        
-        entry = get_nested(d, path, entry)    
+
+        entry = get_nested(d, path, entry)
         syntax = self.get_syntax(self.prototype['parameters'], path, 'prototype')
         prefix = self.get_prefix(entry, path)
 
-        self.query_elements['field'].append({'prefix': prefix, 
-                                             'entry': entry, 
+        self.query_elements['field'].append({'prefix': prefix,
+                                             'entry': entry,
                                              'value': value,
                                              'syntax': syntax})
 
@@ -607,7 +612,7 @@ class Bibs(object):
             raise Exception('Invalid prototype \''+str(value)+'\'')
         proto_param = path[0]
         self.prototype = proto_entry
-        
+
         if 'required' in self.prototype:
             self.proto_required = self.prototype['required']
         if 'cond_req' in self.prototype:
@@ -618,13 +623,13 @@ class Bibs(object):
         #syntax = self.get_syntax(entry, path, 'prototype')
         #key = self.get_key(entry, path)
 
-        self.query_elements['prototype'].append({'prefix': prefix, 
-                                                 'entry': proto_param, 
+        self.query_elements['prototype'].append({'prefix': prefix,
+                                                 'entry': proto_param,
                                                  'value': value,
                                                  'syntax': syntax})
-                
-    
-    def find_param(self, args, params):   
+
+
+    def find_param(self, args, params):
         if isinstance(args, str):
             args = [args,]
         path = []
@@ -641,7 +646,7 @@ class Bibs(object):
 
         for arg in args:
             arg = re.escape(arg)
-            entry = self.search_entries(arg, params)                        
+            entry = self.search_entries(arg, params)
             if entry:
                 params = entry
                 if isinstance(entry, list):
@@ -649,7 +654,7 @@ class Bibs(object):
                     if isinstance(p, str):
                         p = [p]
                     path = flatten_path(p, path)
-                    entry = entry[0]                                        
+                    entry = entry[0]
         if entry is not None:
             return [path, entry]
         return [None, None]
@@ -662,7 +667,7 @@ class Bibs(object):
         if isinstance(params, dict):
             match = self.find_dict_entry(arg, params)
         elif isinstance(params, (list, tuple)):
-            match = self.find_list_entry(arg, params)                    
+            match = self.find_list_entry(arg, params)
         return match
 
 
@@ -671,7 +676,7 @@ class Bibs(object):
             match = re.match('^(?i)'+arg+'$', param)
             if match:
                 path = param
-                return [path, entry]          
+                return [path, entry]
         if not match:
             for param, entry in params.items():
                 match = self.search_entries(arg, entry)
@@ -688,7 +693,7 @@ class Bibs(object):
     def find_list_entry(self, arg, params):
         for param in params:
             if isinstance(param, dict):
-                match = self.find_dict_entry(arg, param)        
+                match = self.find_dict_entry(arg, param)
                 if match:
                     path, entry = match
                     return [path, entry]
@@ -701,7 +706,7 @@ class Bibs(object):
                 match = re.match('^(?i)'+arg+'$', param)
                 if match:
                     return param
-    
+
 
     def create_query_object(self, input_string, source, api):
         query_class = type(source['namespace'], (Bibs,), {})
@@ -722,7 +727,7 @@ class Bibs(object):
         query_object.query_elements = {}
         query_object.params = source['api'][api]['input']['params']
         query_object.options = source['api'][api]['input']['options']
-        
+
         if 'required' in source['api'][api]['input']:
             query_object.global_required = source['api'][api]['input']['required']
         else:
@@ -732,7 +737,7 @@ class Bibs(object):
             query_object.multi_value = True
         else:
             query_object.multi_value = False
-            
+
         if 'syntax' in source['api'][api]['input']:
             query_object.syntax = {}
             source_syntax = source['api'][api]['input']['syntax']
@@ -744,13 +749,13 @@ class Bibs(object):
         else:
             query_object.syntax = None
 
-        query_object.format_input_string()        
+        query_object.format_input_string()
         return query_object
 
 
     def format_input_string(self):
         input_elements = input_options = None
-        elements = re.split('(?<!\\\\)@', self.input_string)                
+        elements = re.split('(?<!\\\\)@', self.input_string)
         if len(elements) == 2:
             input_elements, input_options = elements
         elif len(elements) == 1:
@@ -780,7 +785,7 @@ class Bibs(object):
             if len(m) > 1:
                 self.multi.append(range(c, c + len(m)))
             c += len(m)
-        
+
 
     def split_and_strip(self, string):
         if self.multi_value:
@@ -794,4 +799,4 @@ class Bibs(object):
         return new_elements
 
 
-    
+
